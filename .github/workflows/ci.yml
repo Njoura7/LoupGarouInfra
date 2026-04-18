@@ -31,7 +31,7 @@ jobs:
         run: dotnet build LoupGarouAPI/LoupGarou.sln -c Release --no-restore
 
       - name: Run unit tests
-        run: dotnet test LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj --no-restore --verbosity normal
+        run: dotnet test LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj --no-restore --verbosity normal --framework net10.0
 
       - name: Build API Docker image
         run: docker build -t api:ci LoupGarouAPI
