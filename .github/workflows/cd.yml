@@ -38,14 +38,18 @@ jobs:
 
       - name: Build and push API image
         run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/api:${{ github.sha }} LoupGarouAPI
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/api:${{ github.sha }} \
+            -f LoupGarouAPI/Dockerfile \
+            LoupGarouAPI
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/api:${{ github.sha }}
           docker tag ${{ secrets.ACR_LOGIN_SERVER }}/api:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/api:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/api:latest
 
       - name: Build and push React image
         run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/react:${{ github.sha }} LoupGarouReact
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/react:${{ github.sha }} \
+            -f LoupGarouReact/Dockerfile \
+            LoupGarouReact
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/react:${{ github.sha }}
           docker tag ${{ secrets.ACR_LOGIN_SERVER }}/react:${{ github.sha }} ${{ secrets.ACR_LOGIN_SERVER }}/react:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/react:latest
