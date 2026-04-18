@@ -1,0 +1,40 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "LoupGarou@2024!"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqldata:/var/lib/mssql/data
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 10s
+      retries: 3
+      start_period: 40s
+
+  api:
+    build:
+      context: ../LoupGarouAPI
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__SqlServer: "Server=db,1433;Database=LoupGarou;User Id=sa;Password=LoupGarou@2024!;TrustServerCertificate=True;MultipleActiveResultSets=true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  react:
+    build:
+      context: ../LoupGarouReact
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  sqldata:
