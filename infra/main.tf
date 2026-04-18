@@ -35,14 +35,17 @@ resource "azurerm_kubernetes_cluster" "aks" {
   dns_prefix          = var.aks_name
 
   default_node_pool {
-    name       = "default"
-    node_count = 1
-    vm_size    = "Standard_B2s"
-  }
+  name       = "default"
+  node_count = 1
+  vm_size    = "Standard_B2as_v2"
+}
 
   identity {
     type = "SystemAssigned"
   }
+
+  oidc_issuer_enabled       = true
+  workload_identity_enabled = false
 }
 
 # Allow AKS to pull from ACR
