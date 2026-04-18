@@ -31,10 +31,10 @@ jobs:
         run: dotnet build LoupGarouAPI/LoupGarou.sln -c Release --no-restore
 
       - name: Run unit tests
-        run: dotnet test LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj --no-restore --verbosity normal --framework net10.0
+        run: dotnet test LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj --verbosity normal --framework net10.0
 
       - name: Build API Docker image
-        run: docker build -t api:ci LoupGarouAPI
+        run: docker build -t api:ci -f LoupGarouAPI/Dockerfile LoupGarouAPI
 
   build-and-test-react:
     name: Build and test React
@@ -62,7 +62,7 @@ jobs:
         working-directory: LoupGarouReact
 
       - name: Build React Docker image
-        run: docker build -t react:ci LoupGarouReact
+        run: docker build -t react:ci -f LoupGarouReact/Dockerfile LoupGarouReact
 
   codeql:
     name: CodeQL analysis
