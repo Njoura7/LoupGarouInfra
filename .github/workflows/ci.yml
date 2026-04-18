@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build-and-test-api:
+    name: Build and test API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout LoupGarouAPI
+        uses: actions/checkout@v4
+        with:
+          repository: BenAyedMehdi/LoupGarouAPI
+          ref: develop
+          path: LoupGarouAPI
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore LoupGarouAPI/LoupGarou.sln
+
+      - name: Build
+        run: dotnet build LoupGarouAPI/LoupGarou.sln -c Release --no-restore
+
+      - name: Run unit tests
+        run: dotnet test LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj --no-restore --verbosity normal
+
+      - name: Build API Docker image
+        run: docker build -t api:ci LoupGarouAPI
+
+  build-and-test-react:
+    name: Build and test React
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout LoupGarouReact
+        uses: actions/checkout@v4
+        with:
+          repository: BenAyedMehdi/LoupGarouReact
+          ref: develop
+          path: LoupGarouReact
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: LoupGarouReact
+
+      - name: Run tests
+        run: yarn test --watchAll=false --passWithNoTests
+        working-directory: LoupGarouReact
+
+      - name: Build React Docker image
+        run: docker build -t react:ci LoupGarouReact
+
+  codeql:
+    name: CodeQL analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout LoupGarouAPI
+        uses: actions/checkout@v4
+        with:
+          repository: BenAyedMehdi/LoupGarouAPI
+          ref: develop
+          path: LoupGarouAPI
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          source-root: LoupGarouAPI
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build for CodeQL
+        run: dotnet build LoupGarouAPI/LoupGarou/LoupGarou.csproj -c Release
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
