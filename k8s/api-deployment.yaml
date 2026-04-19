@@ -21,7 +21,10 @@ spec:
             - name: ASPNETCORE_ENVIRONMENT
               value: "Production"
             - name: ConnectionStrings__SqlServer
-              value: "Server=loupgarou-sql.database.windows.net;Database=LoupGarou;User Id=loupgarouadmin;Password=LoupGarou@2024!;TrustServerCertificate=True;MultipleActiveResultSets=true"
+              valueFrom:
+                secretKeyRef:
+                  name: api-db-connection
+                  key: ConnectionStrings__SqlServer
 ---
 apiVersion: v1
 kind: Service

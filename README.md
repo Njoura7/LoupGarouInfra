@@ -60,6 +60,8 @@ projects/
 
 ### Run
 
+Create a local `.env` file next to `docker-compose.yml` with the SQL Server password before starting the stack. You can copy the included `.env.example` and fill in your own value.
+
 ```bash
 docker compose up --build
 ```
@@ -181,6 +183,13 @@ docker push loupgarouacr.azurecr.io/react:latest
 
 ### Deploy to AKS
 
+Create the API Secret before applying the manifests. Replace the value with your real Azure SQL connection string:
+
+```bash
+kubectl create secret generic api-db-connection \
+    --from-literal=ConnectionStrings__SqlServer="Server=loupgarou-sql.database.windows.net;Database=LoupGarou;User Id=loupgarouadmin;Password=YOUR_PASSWORD;TrustServerCertificate=True;MultipleActiveResultSets=true"
+```
+
 ```bash
 kubectl apply -f k8s/
 kubectl get services    # wait ~2 minutes for EXTERNAL-IP to appear on react service
@@ -295,20 +304,204 @@ push to main → GitHub Actions triggers
 
 This is implemented in `.github/workflows/ci.yml` and `.github/workflows/cd.yml`.
 
+
 ---
-
+ 
 ## CI/CD pipeline
+ 
+The pipeline is split into two workflow files in `.github/workflows/`.
+ 
+### How it works
+ 
+```
+push to any branch
+    → CI runs (build + test + CodeQL)
+        → if CI passes on main/develop
+            → CD runs (build + push to ACR + deploy to AKS)
+```
+ 
+### CI (`ci.yml`) — runs on every push to every branch
+ 
+| Job | What it does |
+|---|---|
+| Build and test API | Restores, builds, runs 3 unit tests |
+| Build and test React | Installs deps, runs 3 Jest tests, builds Docker image |
+| CodeQL analysis | Static security analysis on C# code |
+ 
+### CD (`cd.yml`) — runs only when CI passes on `main` or `develop`
+ 
+| Step | What it does |
+|---|---|
+| Checkout repos | Pulls latest from LoupGarouAPI and LoupGarouReact |
+| Login to ACR | Authenticates Docker to Azure Container Registry |
+| Build and push API image | Tags with git SHA + latest, pushes to ACR |
+| Build and push React image | Tags with git SHA + latest, pushes to ACR |
+| Deploy to AKS | Updates running deployments with new image, waits for rollout |
+ 
+Every deployment is tagged with the git commit SHA — so you can always trace which exact code is running in production.
 
-The GitHub Actions pipeline in `.github/workflows/deploy.yml` triggers automatically on every push to `main`:
 
-1. Checks out both app repos
-2. Builds the API and React Docker images
-3. Pushes both images to ACR
-4. Applies the K8s manifests to AKS — new version live automatically
+![CI/CD pipeline](docs/ci-cd-pipeline-logs.png)
 
-No manual deployment steps required after merging to `main`.
+--- 
 
---- 
-  
-  
- 
+### Monitoring deployments
+ 
+**Check running pods:**
+```bash
+kubectl get pods
+```
+ 
+**Check deployment status:**
+```bash
+kubectl get deployments
+```
+ 
+**Stream live API logs:**
+```bash
+kubectl logs deployment/api --follow
+```
+ 
+**Stream live React logs:**
+```bash
+kubectl logs deployment/react --follow
+```
+ 
+**Check rollout history:**
+```bash
+kubectl rollout history deployment/api
+kubectl rollout history deployment/react
+```
+ 
+**Roll back to previous version if something breaks:**
+```bash
+kubectl rollout undo deployment/api
+kubectl rollout undo deployment/react
+```
+ 
+### Required GitHub secrets
+ 
+These secrets must be set in `LoupGarouInfra` → Settings → Secrets and variables → Actions:
+ 
+| Secret | Description |
+|---|---|
+| `ACR_LOGIN_SERVER` | ACR registry URL e.g. `loupgarouacr.azurecr.io` |
+| `ACR_USERNAME` | ACR admin username |
+| `ACR_PASSWORD` | ACR admin password |
+| `KUBE_CONFIG` | Full kubeconfig from `terraform output -raw aks_kube_config` |
+ 
+---
+ 
+## Tearing down Azure resources
+ 
+When not actively demoing, tear down all Azure resources to preserve student credits.
+ 
+**Step 1 — remove Kubernetes resources first:**
+```bash
+kubectl delete -f k8s/
+```
+ 
+**Step 2 — destroy all Terraform-managed Azure resources:**
+```bash
+cd infra
+terraform destroy
+```
+ 
+Type `yes` when prompted. This removes all 7 resources: AKS, ACR, SQL Server, SQL Database, firewall rule, role assignment, and resource group.
+ 
+**Reprovisioning for the demo:**
+```bash
+cd infra
+terraform apply    # ~10 minutes
+az aks get-credentials --resource-group loupgarou-rg --name loupgarou-aks
+kubectl apply -f k8s/
+```
+ 
+Then push any change to `main` to trigger the CD pipeline and redeploy the latest images.
+ 
+> **Note:** After `terraform destroy` and `terraform apply`, the public IP of the React service will change. Run `kubectl get services` to find the new IP.
+
+
+---
+ 
+## Challenges while setting up the CI/CD pipelines and solutions
+ 
+### .NET SDK version conflict in Docker builds
+ 
+The `global.json` file at the solution root pinned the SDK to `10.0.202` for local development. When the CI runner built the Docker image using `mcr.microsoft.com/dotnet/sdk:8.0` (matching the project's `net8.0` target framework), the build failed immediately because the image only ships with .NET 8 SDK and `global.json` was demanding 10.0.202.
+ 
+**Solution:** Deleted `global.json` entirely since the project targets `net8.0` and the local SDK conflict it was solving no longer exists. The Dockerfile base images were also aligned to `mcr.microsoft.com/dotnet/sdk:8.0` and `mcr.microsoft.com/dotnet/aspnet:8.0` to match the project target framework.
+ 
+---
+ 
+### Dockerfile not found in CI/CD context
+ 
+Both the CI and CD pipelines check out app repos into named subdirectories (`LoupGarouAPI/`, `LoupGarouReact/`). A plain `docker build -t image:tag LoupGarouAPI` command looks for a `Dockerfile` at the root of the build context — but Docker was resolving the path relative to the runner's working directory, not the repo folder.
+ 
+**Solution:** Added the `-f` flag to explicitly point to each Dockerfile:
+ 
+```bash
+docker build -t image:tag -f LoupGarouAPI/Dockerfile LoupGarouAPI
+docker build -t image:tag -f LoupGarouReact/Dockerfile LoupGarouReact
+```
+ 
+---
+ 
+### `Microsoft.AspNetCore.Mvc.Testing` version incompatibility
+ 
+The test project originally referenced `Microsoft.AspNetCore.Mvc.Testing 9.0.0` while the project target framework was `net8.0`. Version 9.0.0 of this package only supports `net9.0` — the restore step failed with `NU1202: Package is not compatible with net8.0`.
+ 
+**Solution:** Downgraded to `Microsoft.AspNetCore.Mvc.Testing 8.0.0` which is compatible with `net8.0`.
+ 
+---
+ 
+### `UseInMemoryDatabase` not found — missing EF Core InMemory package
+ 
+The unit tests use an in-memory database via `UseInMemoryDatabase()` from `Microsoft.EntityFrameworkCore.InMemory`. This package was accidentally removed from `TestLoupGarou.csproj` during package cleanup. The error `CS1061: does not contain a definition for UseInMemoryDatabase` appeared both locally and in CI.
+ 
+**Solution:** Re-added `Microsoft.EntityFrameworkCore.InMemory` at version `9.0.0` to match the rest of the EF Core packages. All EF Core packages must use the same version regardless of the target framework version.
+ 
+```xml
+<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
+```
+ 
+---
+ 
+### `--no-restore` flag caused NETSDK1005 in CI
+ 
+The test command used `--no-restore` assuming the restore step had already run. However, the restore was running against the solution file while the test command targeted the test project directly. The assets file for `net10.0` (from an earlier migration attempt) didn't match what was actually restored, causing `NETSDK1005: Assets file doesn't have a target for net10.0`.
+ 
+**Solution:** Removed `--no-restore` from the test command and switched to restoring each project individually rather than via the solution file:
+ 
+```yaml
+- name: Restore dependencies
+  run: |
+    dotnet restore LoupGarouAPI/LoupGarou/LoupGarou.csproj
+    dotnet restore LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj
+ 
+- name: Run unit tests
+  run: dotnet test LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj --verbosity normal
+```
+ 
+---
+ 
+### Axios ESM import breaking Jest in React tests
+ 
+React tests using `jest.mock('axios')` failed with `SyntaxError: Cannot use import statement outside a module`. Axios v1+ ships as an ES module, which the default Jest/CRA configuration cannot parse.
+ 
+**Solution:** Instead of importing axios and mocking it with `jest.mock('axios')`, we defined mock functions directly and used the factory pattern to replace the entire axios module with plain CommonJS-compatible functions:
+ 
+```javascript
+const mockGet = jest.fn();
+const mockPost = jest.fn();
+ 
+jest.mock('axios', () => ({
+  get: mockGet,
+  post: mockPost,
+}));
+ 
+const apiCalls = require('../apiCalls').default;
+```
+ 
+This avoids Jest ever touching the real axios package and its ESM syntax.
+ 

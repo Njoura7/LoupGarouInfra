@@ -2,7 +2,7 @@ services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
-      SA_PASSWORD: "LoupGarou@2024!"
+      SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
       ACCEPT_EULA: "Y"
     ports:
       - "1433:1433"
@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      ConnectionStrings__SqlServer: "Server=db,1433;Database=LoupGarou;User Id=sa;Password=LoupGarou@2024!;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      ConnectionStrings__SqlServer: "Server=db,1433;Database=LoupGarou;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true"
     ports:
       - "8080:8080"
     depends_on:
