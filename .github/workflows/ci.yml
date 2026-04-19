@@ -25,13 +25,15 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore dependencies
-        run: dotnet restore LoupGarouAPI/LoupGarou.sln
+        run: |
+          dotnet restore LoupGarouAPI/LoupGarou/LoupGarou.csproj
+          dotnet restore LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj
 
       - name: Build
-        run: dotnet build LoupGarouAPI/LoupGarou.sln -c Release --no-restore
+        run: dotnet build LoupGarouAPI/LoupGarou/LoupGarou.csproj -c Release --no-restore
 
       - name: Run unit tests
-        run: dotnet test LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj --verbosity normal --framework net10.0
+        run: dotnet test LoupGarouAPI/TestLoupGarou/TestLoupGarou.csproj --verbosity normal
 
       - name: Build API Docker image
         run: docker build -t api:ci -f LoupGarouAPI/Dockerfile LoupGarouAPI
