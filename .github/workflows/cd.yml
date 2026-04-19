@@ -19,14 +19,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: BenAyedMehdi/LoupGarouAPI
-          ref: develop
+          ref: feature/docker-infra
           path: LoupGarouAPI
 
       - name: Checkout LoupGarouReact
         uses: actions/checkout@v4
         with:
           repository: BenAyedMehdi/LoupGarouReact
-          ref: develop
+          ref: feature/docker-infra
           path: LoupGarouReact
 
       - name: Login to ACR
