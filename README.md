@@ -504,4 +504,3 @@ const apiCalls = require('../apiCalls').default;
 ```
  
 This avoids Jest ever touching the real axios package and its ESM syntax.
- 
