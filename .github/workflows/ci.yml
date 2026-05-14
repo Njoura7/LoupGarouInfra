@@ -6,6 +6,8 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  repository_dispatch:
+    types: [external-repo-push]
 
 jobs:
   build-and-test-api:

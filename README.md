@@ -343,9 +343,54 @@ Every deployment is tagged with the git commit SHA — so you can always trace w
 
 ![CI/CD pipeline](docs/ci-cd-pipeline-logs.png)
 
+---
+
+### Cross-repo triggers — trigger infra CI from source repos
+
+The CI workflow also listens for `repository_dispatch` events, which allows the source repositories (`LoupGarouAPI` and `LoupGarouReact`) to trigger builds in the infra repo.
+
+**How it works:**
+1. Push to `feature/docker-infra` branch in `LoupGarouAPI` or `LoupGarouReact`
+2. A small "notifier" workflow in the source repo sends a `repository_dispatch` event to this infra repo
+3. Infra CI runs (build, test, CodeQL)
+4. If CI passes, infra CD runs (build images, push to ACR, deploy to AKS)
+
+**Setup for source repos (one-time):**
+
+In `LoupGarouAPI/.github/workflows/notify-infra.yml` and `LoupGarouReact/.github/workflows/notify-infra.yml`, add:
+
+```yaml
+name: Notify Infra CI
+
+on:
+  push:
+    branches: [feature/docker-infra]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger LoupGarouInfra CI
+        env:
+          TOKEN: ${{ secrets.INFRA_REPO_DISPATCH_TOKEN }}
+        run: |
+          curl -X POST \
+            -H "Authorization: token $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/BenAyedMehdi/LoupGarouInfra/dispatches \
+            -d '{"event_type":"external-repo-push"}'
+```
+
+Then add the secret `INFRA_REPO_DISPATCH_TOKEN` in each source repo:
+- A Personal Access Token (PAT) with `repo` scope (or `public_repo` for public repos)
+- Can be the same token across both repos
+
+This allows developers to test Docker builds and deployments by pushing changes to the feature branches in the source repos, without manual intervention in the infra repo.
+
 --- 
 
 ### Monitoring deployments
+
  
 **Check running pods:**
 ```bash
@@ -503,5 +548,5 @@ jest.mock('axios', () => ({
 const apiCalls = require('../apiCalls').default;
 ```
  
- 
+
 This avoids Jest ever touching the real axios package and its ESM syntax.
