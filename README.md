@@ -1,6 +1,6 @@
 # LoupGarou Infra
 
-Infrastructure for the LoupGarou app — Docker orchestration, Kubernetes manifests, and cloud provisioning via Terraform on Azure.
+Infrastructure for the LoupGarou app — Docker orchestration, Kubernetes manifests, and cloud provisioning via Terraform on Azure..
 
 
 ## Architecture
